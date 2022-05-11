@@ -14,7 +14,7 @@ Server and client scripts to control an [AdaFruit Tri-Color USB Controlled Tower
 
 - ```pip3 install pyserial```
 
-- ```python3 MwillCU.python [<deviceName>]```
+- ```python3 MwillCU.py [<deviceName>]```
 
 - ```bash checkIdle.sh``` will keep light on until idle for eg 10 minutes
 
