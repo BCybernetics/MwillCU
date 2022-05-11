@@ -6,7 +6,14 @@ don't forget `pip3 install pyserial`
 
 Usage:
 
-client processes should 
+python3 MwillCU.python [<deviceName>]
+
+where optional <deviceName> is the name of the serial port for the towerlight, 
+on the mac found in /dev/ listing, eg 'cu.usbserial-4013110'
+Serial devices will show up as 2 port entries, 'cu.usbserial-*' and 'tty.usbserial-*'
+we want the 'cu.usbserial-*' port, because that is for the "calling out unit"
+
+client processes should: 
 
 1. connect on port 10007, eg. ```nc 127.0.0.1 10007 hello```
 
@@ -16,6 +23,8 @@ client processes should
 ```yellow``` turns light YELLOW for kYellowTimeOut, then server will automatically switch light to GREEN
 ```green``` turns light GREEN for kGreenTimeOut, then server will automatically switch light to OFF
 ```off``` turns light OFF (and never times out)
+```active``` tells us that user is active (so keep light going)
+```idle```  tell us that user is idle (so turn light off)
 ```quit``` tells server to turn off light and quit
 
 
@@ -25,12 +34,17 @@ import serial
 import time
 import socket
 import select
+import sys
 
-kOverallTimeOut = 60.0  # quit server after a while so we don't run forever
+kOverallTimeOut = 86400000.0  # quit server after a while so we don't run forever
 
 # serial port settings for USB
 #serialPort = 'COM57'  # Change to the serial/COM port of the tower light
-serialPort = '/dev/cu.usbserial-40110'  # on mac/linux, it will be a /dev path
+
+# deviceName likely different for every computer/device
+# on mac/linux, it will be a /dev path
+# can be passed in on command line
+deviceName = 'cu.usbserial-4013110'  
 baudRate = 9600
 
 # byte commands sent to LED USB device
@@ -68,7 +82,7 @@ ledStartTime = 2147483647.0
 kOffTimeOut = 2147483647.0 # never time out
 kRedTimeOut = 3300.0 # 55 minutes
 kYellowTimeOut = 600.0 # 10 minutes
-kGreenTimeOut = 600.0 # 10 minutes, unless activity intervenes
+kGreenTimeOut = 2147483647.0 # never time out
 
 timeOuts = [0.0] * 4
 timeOuts[kOff] = kOffTimeOut
@@ -87,7 +101,7 @@ HOST = '127.0.0.1'
 
 SELECT_TIMEOUT = 1
 
-# nc 127.0.0.1 10007 <type commands>
+
 
 # ------------------------------------------------------------- #
 
@@ -159,6 +173,11 @@ if __name__ == '__main__':
     
     
     # connect to usb serial device
+    if len(sys.argv) >= 2:
+          deviceName = sys.argv[1]
+     
+    print(deviceName)
+    serialPort = '/dev/'+ deviceName
     mSerial = serial.Serial(serialPort, baudRate)
 
     # set light to initial state
@@ -190,7 +209,12 @@ if __name__ == '__main__':
                     readable.remove(rs)
                     rs.close()
                 else:
-                    if b"red" in buf:
+                    if b"active" in buf:
+                         if currentLED == kOff:
+                              setLED(mSerial,kGreen)
+                    elif b"idle" in buf:
+                         setLED(mSerial,kOff)
+                    elif b"red" in buf:
                          setLED(mSerial,kRed)
                     elif b"yellow" in buf:
                          setLED(mSerial,kYellow)
