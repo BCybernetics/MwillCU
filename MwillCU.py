@@ -47,6 +47,7 @@ kOverallTimeOut = 86400000.0  # quit server after a while so we don't run foreve
 deviceName = 'cu.usbserial-4013110'  
 baudRate = 9600
 
+
 # byte commands sent to LED USB device
 RED_ON = 0x11
 RED_OFF = 0x21
@@ -71,18 +72,25 @@ kRed = 1
 kYellow = 2
 kGreen = 3
 
+# was LED set by the user, or was LED set by idle script
+
+kAutoSet = 0
+kUserSet = 1
+kIdleSet = 2
+kTimerSet = 3
+
+lastAgent = kAutoSet 
 
 # the curent LED and when it was started
 currentLED = kOff
 ledStartTime = 2147483647.0
 
 # length of time that a light is left on before automatically rolling over to next light
-# note: off remains in that state forever
 
-kOffTimeOut = 2147483647.0 # never time out
+kOffTimeOut = 1800 # 30 minutes -- but then resets to another 30 minutes
 kRedTimeOut = 3300.0 # 55 minutes
 kYellowTimeOut = 600.0 # 10 minutes
-kGreenTimeOut = 2147483647.0 # never time out
+kGreenTimeOut = 3300.0 # 55 minutes
 
 timeOuts = [0.0] * 4
 timeOuts[kOff] = kOffTimeOut
@@ -118,10 +126,17 @@ def allOff(serialport):
 
 # ------------------------------------------------------------- #
 
-def setLED(serialport,ledName):
+def setLED(agentTag,serialport,ledName):
 
     global currentLED
     global ledStartTime
+    global lastAgent
+    
+    # don't let auto override
+    if ((agentTag == kIdleSet) and (lastAgent == kUserSet)):
+        return
+     
+    lastAgent = agentTag
     
     # Clean up any old state
     allOff(serialport)
@@ -135,12 +150,8 @@ def setLED(serialport,ledName):
         currentLED = kGreen
         sendCommand(serialport, GREEN_ON)
         
-    if (ledName == kOff):
-        currentLED = kOff
-        ledStartTime = 2147483647.0
-    else:
-        currentLED = ledName
-        ledStartTime = time.time();
+    currentLED = ledName
+    ledStartTime = time.time();
     print(currentLED,"  ", ledStartTime)
     
 # ------------------------------------------------------------- #
@@ -155,9 +166,14 @@ def checkLEDTimer(serialport):
   #  print(currentLED, " " , timeNow, " ", ledStartTime, "  ", timeOuts[currentLED])
     if ((timeNow - ledStartTime) > timeOuts[currentLED]):
         nextLED = currentLED + 1;
-        if (nextLED > kGreen):
+        if (nextLED == kRed and lastAgent == kUserSet): 
+            #kOff timed out, so stay off but after next time out let idle take over
+            setLED(kTimerSet,serialport,kOff)
+        if (nextLED == kYellow):
+            setLED(lastAgent,serialport,kYellow)
+        elif (nextLED > kGreen):
             nextLED = kOff
-        setLED(serialport,nextLED)
+            setLED(kTimerSet,serialport,nextLED)
                
 # ------------------------------------------------------------- #
 
@@ -181,7 +197,7 @@ if __name__ == '__main__':
     mSerial = serial.Serial(serialPort, baudRate)
 
     # set light to initial state
-    setLED(mSerial,currentLED)
+    setLED(kAutoSet,mSerial,currentLED)
     
     
     # prepare for loop
@@ -211,17 +227,17 @@ if __name__ == '__main__':
                 else:
                     if b"active" in buf:
                          if currentLED == kOff:
-                              setLED(mSerial,kGreen)
+                              setLED(kIdleSet,mSerial,kGreen)
                     elif b"idle" in buf:
-                         setLED(mSerial,kOff)
+                         setLED(kIdleSet,mSerial,kOff)
                     elif b"red" in buf:
-                         setLED(mSerial,kRed)
+                         setLED(kUserSet,mSerial,kRed)
                     elif b"yellow" in buf:
-                         setLED(mSerial,kYellow)
+                         setLED(kUserSet,mSerial,kYellow)
                     elif b"green" in buf:
-                         setLED(mSerial,kGreen)
+                         setLED(kUserSet,mSerial,kGreen)
                     elif b"off" in buf:
-                         setLED(mSerial,kOff)
+                         setLED(kUserSet,mSerial,kOff)
                     elif b"quit" in buf:
                          runningFlag = False  
                     print (buf)
