@@ -6,7 +6,7 @@ don't forget `pip3 install pyserial`
 
 Usage:
 
-python3 MwillCU.python [<deviceName>]
+python3 MwillCU.py [<deviceName>]
 
 where optional <deviceName> is the name of the serial port for the towerlight, 
 on the mac found in /dev/ listing, eg 'cu.usbserial-4013110'
@@ -49,6 +49,8 @@ baudRate = 9600
 
 
 # byte commands sent to LED USB device
+
+ALL_OFF = 0x00 # virtual command, translated to sending allOff
 RED_ON = 0x11
 RED_OFF = 0x21
 RED_BLINK = 0x41
@@ -66,37 +68,13 @@ BUZZER_OFF = 0x28
 BUZZER_BLINK = 0x48
 
 
-# index to LED states
-kOff = 0
-kRed = 1
-kYellow = 2
-kGreen = 3
 
-# was LED set by the user, or was LED set by idle script
 
-kAutoSet = 0
-kUserSet = 1
-kIdleSet = 2
-kTimerSet = 3
+ 
 
-lastAgent = kAutoSet 
 
-# the curent LED and when it was started
-currentLED = kOff
-ledStartTime = 2147483647.0
 
-# length of time that a light is left on before automatically rolling over to next light
 
-kOffTimeOut = 1800 # 30 minutes -- but then resets to another 30 minutes
-kRedTimeOut = 3300.0 # 55 minutes
-kYellowTimeOut = 600.0 # 10 minutes
-kGreenTimeOut = 3300.0 # 55 minutes
-
-timeOuts = [0.0] * 4
-timeOuts[kOff] = kOffTimeOut
-timeOuts[kRed] = kRedTimeOut
-timeOuts[kYellow] = kYellowTimeOut
-timeOuts[kGreen] = kGreenTimeOut
 
 
 # ------------------------------------------------------------- #
@@ -109,7 +87,64 @@ HOST = '127.0.0.1'
 
 SELECT_TIMEOUT = 1
 
+# states
+kUserOff = 0
+kUserGreen  = 1
+kUserYellow  = 2
+kUserRed  = 3
+kActiveGreen  = 4
+kIdleOff  = 5
+kTimerYellow  = 6
+kTimerGreen   = 7
+kVideoOn = 8
+kVideoOff = 9
 
+kStateColors = [ALL_OFF, GREEN_ON, YELLOW_ON, RED_ON, GREEN_ON, ALL_OFF, YELLOW_ON, GREEN_ON, RED_ON, ALL_OFF]
+
+# element at [<senderColor>,<lastSenderCurrentColor>] is <newSenderNewColor>
+kTransitionTable = [
+[kUserOff,kUserOff,kUserOff,kUserOff,kUserOff,kUserOff,kUserOff,kUserOff,kUserOff,kUserOff],
+[kUserGreen,kUserGreen,kUserGreen,kUserGreen,kUserGreen,kUserGreen,kUserGreen,kUserGreen,kUserGreen,kVideoOff],
+[kUserYellow,kUserYellow,kUserYellow,kUserYellow,kUserYellow,kUserYellow,kUserYellow,kUserYellow,kUserYellow,kVideoOff],
+[kUserRed,kUserRed,kUserRed,kUserRed,kUserRed,kUserRed,kUserRed,kUserRed,kUserRed,kVideoOff],
+[kUserOff,kUserGreen,kUserYellow,kUserRed,kActiveGreen,kActiveGreen,kTimerYellow,kActiveGreen,kVideoOn,kVideoOff],
+[kUserOff,kUserGreen,kUserYellow,kUserRed,kIdleOff,kIdleOff,kTimerYellow,kTimerGreen,kVideoOn,kVideoOff],
+[kUserOff,kUserGreen,kUserYellow,kUserRed,kTimerYellow,kTimerYellow,kTimerYellow,kTimerGreen,kVideoOn,kVideoOff],
+[kUserOff,kUserGreen,kUserYellow,kUserRed,kUserGreen,kUserGreen,kUserGreen,kUserGreen,kVideoOn,kVideoOff],
+[kVideoOn,kVideoOn,kVideoOn,kVideoOn,kVideoOn,kVideoOn,kVideoOn,kVideoOn,kVideoOn,kVideoOff],
+[kUserOff,kUserGreen,kUserYellow,kUserRed,kActiveGreen,kIdleOff,kTimerYellow,kTimerGreen,kTimerYellow,kVideoOff]
+]
+
+# ------------------------------------------------------------- #
+
+# length of time that a light is left on before automatically rolling over to next light
+
+kOffTimeOut = 1800 # 30 minutes -- but then resets to another 30 minutes
+kRedTimeOut = 3300.0 # 55 minutes
+kYellowTimeOut = 600.0 # 10 minutes
+kGreenTimeOut = 3300.0 # 55 minutes
+
+kTimeOuts = [
+     [3600,kActiveGreen],
+     [3600,kActiveGreen],
+     [3600,kActiveGreen],
+     [3300,kTimerYellow],
+     [0,kActiveGreen],
+     [0,kIdleOff],
+     [300,kUserGreen ],
+     [3600,kUserGreen ],
+     [0,kVideoOn],
+     [0,kVideoOff]
+]
+
+
+
+# ------------------------------------------------------------- #
+
+# the curent LED and when it was started
+currentLED = ALL_OFF
+currentState = kIdleOff
+ledStartTime = 2147483647.0
 
 # ------------------------------------------------------------- #
 
@@ -126,54 +161,51 @@ def allOff(serialport):
 
 # ------------------------------------------------------------- #
 
-def setLED(agentTag,serialport,ledName):
+def setNewState(serialport,newInput):
+
+     global currentState
+     global ledStartTime
+     
+     newState = kTransitionTable[newInput][currentState]
+     
+     if (newState != currentState):
+          newColor = kStateColors[newState]
+          setLED(serialport,newColor)
+          currentState = newState
+          ledStartTime = time.time();
+          print(currentState,"  ", ledStartTime)
+
+# ------------------------------------------------------------- #
+
+def setLED(serialport,ledColor):
 
     global currentLED
-    global ledStartTime
-    global lastAgent
-    
-    # don't let auto override
-    if ((agentTag == kIdleSet) and (lastAgent == kUserSet)):
-        return
-     
-    lastAgent = agentTag
-    
+
     # Clean up any old state
     allOff(serialport)
-    if (ledName == kRed):
-        sendCommand(serialport, RED_ON)
-        currentLED = kRed
-    elif (ledName == kYellow):
-        currentLED = kYellow
-        sendCommand(serialport, YELLOW_ON)
-    elif (ledName == kGreen):
-        currentLED = kGreen
-        sendCommand(serialport, GREEN_ON)
+    if (ledColor != ALL_OFF):
+        sendCommand(serialport, ledColor)
         
-    currentLED = ledName
-    ledStartTime = time.time();
-    print(currentLED,"  ", ledStartTime)
+    currentLED = ledColor
+
     
 # ------------------------------------------------------------- #
 
         
 def checkLEDTimer(serialport):
+    global currentState
     global currentLED
     global ledStartTime
     global timeOuts
     
+    if (kTimeOuts[currentState][0] == 0):
+          return
+          
     timeNow = time.time();
-  #  print(currentLED, " " , timeNow, " ", ledStartTime, "  ", timeOuts[currentLED])
-    if ((timeNow - ledStartTime) > timeOuts[currentLED]):
-        nextLED = currentLED + 1;
-        if (nextLED == kRed and lastAgent == kUserSet): 
-            #kOff timed out, so stay off but after next time out let idle take over
-            setLED(kTimerSet,serialport,kOff)
-        if (nextLED == kYellow):
-            setLED(lastAgent,serialport,kYellow)
-        elif (nextLED > kGreen):
-            nextLED = kOff
-            setLED(kTimerSet,serialport,nextLED)
+   # print(currentState, " " , (timeNow - ledStartTime), "  ", kTimeOuts[currentState][0])
+    if ((timeNow - ledStartTime) > kTimeOuts[currentState][0]):
+        print(currentState, " Timed Out! -> ",kTimeOuts[currentState][1])
+        setNewState(serialport,kTimeOuts[currentState][1])
                
 # ------------------------------------------------------------- #
 
@@ -197,7 +229,7 @@ if __name__ == '__main__':
     mSerial = serial.Serial(serialPort, baudRate)
 
     # set light to initial state
-    setLED(kAutoSet,mSerial,currentLED)
+    allOff(mSerial)
     
     
     # prepare for loop
@@ -226,18 +258,21 @@ if __name__ == '__main__':
                     rs.close()
                 else:
                     if b"active" in buf:
-                         if currentLED == kOff:
-                              setLED(kIdleSet,mSerial,kGreen)
+                         setNewState(mSerial,kActiveGreen)
                     elif b"idle" in buf:
-                         setLED(kIdleSet,mSerial,kOff)
+                         setNewState(mSerial,kIdleOff)
                     elif b"red" in buf:
-                         setLED(kUserSet,mSerial,kRed)
+                         setNewState(mSerial,kUserRed)
+                    elif b"videoOn" in buf:
+                         setNewState(mSerial,kVideoOn)
+                    elif b"videoOff" in buf:
+                         setNewState(mSerial,kVideoOff)
                     elif b"yellow" in buf:
-                         setLED(kUserSet,mSerial,kYellow)
+                         setNewState(mSerial,kUserYellow)
                     elif b"green" in buf:
-                         setLED(kUserSet,mSerial,kGreen)
+                         setNewState(mSerial,kUserGreen)
                     elif b"off" in buf:
-                         setLED(kUserSet,mSerial,kOff)
+                         setNewState(mSerial,kUserOff)
                     elif b"quit" in buf:
                          runningFlag = False  
                     print (buf)

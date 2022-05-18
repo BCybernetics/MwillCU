@@ -6,20 +6,21 @@
 # then tell the towerlight server that the user is idleing
 # otherwise tell the server that user is still active
 
-CHECKTIME=10
+CHECKTIME=5
 TIMEOUT=600
  
 until false
 do
-  IDLETIME=$((`ioreg -c IOHIDSystem | sed -e '/HIDIdleTime/ !{ d' -e 't' -e '}' -e 's/.* = //g' -e 'q'` / 1000000000))
-  echo $IDLETIME
-  if [[ $IDLETIME -gt $TIMEOUT ]]
+  NUMCAMERAS=$(livecameras)
+  echo $NUMCAMERAS
+  
+  if [[ $NUMCAMERAS -gt 0 ]]
   
   then
      # send "idle" command to MwillCU towerlight server
-     echo "idle" | nc -w 1 127.0.0.1 10007
+     echo "videoOn" | nc -w 1 127.0.0.1 10007
   else
-     echo "active" | nc -w 1 127.0.0.1 10007
+     echo "videoOff" | nc -w 1 127.0.0.1 10007
   fi
   sleep $CHECKTIME
 done
