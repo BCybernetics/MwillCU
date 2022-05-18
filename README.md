@@ -13,11 +13,18 @@ Server and client scripts to control an [AdaFruit Tri-Color USB Controlled Tower
 
 [TODO: diagram of office]
 
-## Server Installation
+## Server Installation and run
 
--  Be sure to install pyserial: ```pip3 install pyserial```
 
--  Launch the server: ```python MwillCU.python```
+- ```pip3 install pyserial```
+
+- ```python3 MwillCU.py [<deviceName>]```
+
+- ```bash checkIdle.sh``` will keep light on until idle for eg 10 minutes
+
+- ```bash red.sh``` will tell the server to set the light red. Similar for ```green.sh```, etc
+
+- Launching the Automator scripts "RedLED.app" etc execute the same shell commands to change light color; wrapped in Automator scripts for eg. us with StreamDeck "open app" buttons
 
 ## Control
 
