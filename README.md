@@ -1,20 +1,23 @@
 # MwillCU
 
-Server and client scripts to control an [AdaFruit Tri-Color USB Controlled Tower Light with Buzzer (Product ID: 5125)](https://www.adafruit.com/product/5125).
+Server and client scripts to control an [AdaFruit Tri-Color USB Controlled Tower Light](https://www.adafruit.com/product/5125) for busy / available entry signal lights, to indicate if office occupant is "on the air" or otherwise unavailable.
 
+
+[TODO: link to video demonstration]
 
 ## Hardware
 
 - [AdaFruit Tri-Color USB Controlled Tower Light with Buzzer (Product ID: 5125)](https://www.adafruit.com/product/5125)
 
-- [USB 3.0 Active Extension Cable 32 Feet with 5V 2A Power Adapter](https://www.amazon.com/dp/B07XHR14LJ?ref=ppx_pop_dt_b_asin_title&th=1
-)
+- [USB 3.0 Active Extension Cable 32 Feet with 5V 2A Power Adapter](https://www.amazon.com/dp/B07XHR14LJ?ref=ppx_pop_dt_b_asin_title&th=1)
+
+[TODO: diagram of office]
 
 ## Server Installation
 
--  ```pip3 install pyserial```
+-  Be sure to install pyserial: ```pip3 install pyserial```
 
-- ```python MwillCU.python```
+-  Launch the server: ```python MwillCU.python```
 
 ## Control
 
@@ -31,6 +34,12 @@ client processes should
 - ```quit``` tells server to turn off light and quit itself
 
 
+## Elgato Stream Deck Integration
+
+## Video Camera / Keyboard Activity Detection
+
+
+# Technical Details
  
 ## USB Connection
 
