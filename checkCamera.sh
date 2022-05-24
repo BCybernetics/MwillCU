@@ -6,7 +6,7 @@
 # then tell the towerlight server that the user is idleing
 # otherwise tell the server that user is still active
 
-CHECKTIME=5
+CHECKTIME=10
 TIMEOUT=600
  
 until false

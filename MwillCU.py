@@ -35,6 +35,7 @@ import time
 import socket
 import select
 import sys
+import glob
 
 kOverallTimeOut = 86400000.0  # quit server after a while so we don't run forever
 
@@ -100,6 +101,18 @@ kVideoOn = 8
 kVideoOff = 9
 
 kStateColors = [ALL_OFF, GREEN_ON, YELLOW_ON, RED_ON, GREEN_ON, ALL_OFF, YELLOW_ON, GREEN_ON, RED_ON, ALL_OFF]
+kStateStrings = [
+     "UserOff",
+     "UserGreen",
+     "UserYellow",
+     "UserRed",
+     "ActiveGreen",
+     "IdleOff",
+     "TimerYellow",
+     "TimerGreen",
+     "VideoOn",
+     "VideoOff"
+]
 
 # element at [<senderColor>,<lastSenderCurrentColor>] is <newSenderNewColor>
 kTransitionTable = [
@@ -108,7 +121,7 @@ kTransitionTable = [
 [kUserYellow,kUserYellow,kUserYellow,kUserYellow,kUserYellow,kUserYellow,kUserYellow,kUserYellow,kUserYellow,kVideoOff],
 [kUserRed,kUserRed,kUserRed,kUserRed,kUserRed,kUserRed,kUserRed,kUserRed,kUserRed,kVideoOff],
 [kUserOff,kUserGreen,kUserYellow,kUserRed,kActiveGreen,kActiveGreen,kTimerYellow,kActiveGreen,kVideoOn,kVideoOff],
-[kUserOff,kUserGreen,kUserYellow,kUserRed,kIdleOff,kIdleOff,kTimerYellow,kTimerGreen,kVideoOn,kVideoOff],
+[kUserOff,kUserGreen,kUserYellow,kUserRed,kIdleOff,kIdleOff,kIdleOff,kIdleOff,kVideoOn,kIdleOff],
 [kUserOff,kUserGreen,kUserYellow,kUserRed,kTimerYellow,kTimerYellow,kTimerYellow,kTimerGreen,kVideoOn,kVideoOff],
 [kUserOff,kUserGreen,kUserYellow,kUserRed,kUserGreen,kUserGreen,kUserGreen,kUserGreen,kVideoOn,kVideoOff],
 [kVideoOn,kVideoOn,kVideoOn,kVideoOn,kVideoOn,kVideoOn,kVideoOn,kVideoOn,kVideoOn,kVideoOff],
@@ -119,22 +132,38 @@ kTransitionTable = [
 
 # length of time that a light is left on before automatically rolling over to next light
 
-kOffTimeOut = 1800 # 30 minutes -- but then resets to another 30 minutes
+kOffTimeOut = 3600 # 60 minutes 
 kRedTimeOut = 3300.0 # 55 minutes
 kYellowTimeOut = 600.0 # 10 minutes
 kGreenTimeOut = 3300.0 # 55 minutes
 
 kTimeOuts = [
-     [3600,kActiveGreen],
-     [3600,kActiveGreen],
-     [3600,kActiveGreen],
-     [3300,kTimerYellow],
+     [kOffTimeOut,kActiveGreen],
+     [kGreenTimeOut,kActiveGreen],
+     [kYellowTimeOut,kActiveGreen],
+     [kRedTimeOut,kTimerYellow],
      [0,kActiveGreen],
      [0,kIdleOff],
-     [300,kUserGreen ],
-     [3600,kUserGreen ],
+     [kYellowTimeOut,kUserGreen ],
+     [kGreenTimeOut,kUserGreen ],
      [0,kVideoOn],
      [0,kVideoOff]
+]
+
+# ------------------------------------------------------------- #
+
+# tokens received by server, mapped to new state input
+kTokenInputMap = [
+     [ b"off",  kUserOff],
+     [ b"green",  kUserGreen],
+     [ b"yellow",  kUserYellow],
+     [ b"red",  kUserRed],
+     [ b"active",  kActiveGreen],
+     [ b"idle",  kIdleOff],
+     [ b"timedY",  kTimerYellow],
+     [ b"timedG",  kTimerGreen],
+     [ b"videoOn",  kVideoOn],
+     [ b"videoOff",  kVideoOff]
 ]
 
 
@@ -161,19 +190,30 @@ def allOff(serialport):
 
 # ------------------------------------------------------------- #
 
-def setNewState(serialport,newInput):
+def setState(serialport,newState):
 
      global currentState
      global ledStartTime
-     
-     newState = kTransitionTable[newInput][currentState]
      
      if (newState != currentState):
           newColor = kStateColors[newState]
           setLED(serialport,newColor)
           currentState = newState
           ledStartTime = time.time();
-          print(currentState,"  ", ledStartTime)
+          print("New state: ", kStateStrings[currentState],"  ", ledStartTime)
+          
+# ------------------------------------------------------------- #
+
+def transitionToNewState(serialport,newInput):
+
+     global currentState
+     global ledStartTime
+     
+     newState = kTransitionTable[newInput][currentState]
+     
+     setState(serialport,newState)
+     
+     
 
 # ------------------------------------------------------------- #
 
@@ -205,11 +245,13 @@ def checkLEDTimer(serialport):
    # print(currentState, " " , (timeNow - ledStartTime), "  ", kTimeOuts[currentState][0])
     if ((timeNow - ledStartTime) > kTimeOuts[currentState][0]):
         print(currentState, " Timed Out! -> ",kTimeOuts[currentState][1])
-        setNewState(serialport,kTimeOuts[currentState][1])
+        setState(serialport,kTimeOuts[currentState][1])
+        print("switched to ", currentState)
                
 # ------------------------------------------------------------- #
 
 if __name__ == '__main__':
+
     
     # set up socketserver
     serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -219,13 +261,24 @@ if __name__ == '__main__':
     serversocket.listen(10) # how many connections requests to queue
     readable = [serversocket];
     
+    # use default serial port, almost certainly not correct
+    serialPort = '/dev/'+ deviceName
     
     # connect to usb serial device
     if len(sys.argv) >= 2:
           deviceName = sys.argv[1]
+          print(deviceName)
+          serialPort = '/dev/'+ deviceName
+    else:
+          servernames = glob.glob('/dev/cu.usbserial-*')
+          if (len(servernames) == 1):
+               print("Found serial device ", servernames[0])
+               serialPort = servernames[0]
+          elif (len(servernames) > 1):
+               print("\nFound more than one /dev/cu.usbserial-* device,\nso you'll need to specify on invoation\neg: python3 MwillCU.py cu.usbserial-11111")
      
-    print(deviceName)
-    serialPort = '/dev/'+ deviceName
+    print("using serial port: ",serialPort,"\n\n")
+
     mSerial = serial.Serial(serialPort, baudRate)
 
     # set light to initial state
@@ -247,35 +300,24 @@ if __name__ == '__main__':
         for rs in r:
              if rs is serversocket: # is it the server
                 c,a = serversocket.accept()
-                print('\r{}:'.format(a),'connected')
+                # print('\r{}:'.format(a),'connected')
                 readable.append(c) # add the client
              else:
                 # read from a client, and parse the command
                 buf = rs.recv(MAX_LENGTH)
                 if not buf:
-                    print('\r{}:'.format(rs.getpeername()),'disconnected')
+                    # print('\r{}:'.format(rs.getpeername()),'disconnected')
                     readable.remove(rs)
                     rs.close()
                 else:
-                    if b"active" in buf:
-                         setNewState(mSerial,kActiveGreen)
-                    elif b"idle" in buf:
-                         setNewState(mSerial,kIdleOff)
-                    elif b"red" in buf:
-                         setNewState(mSerial,kUserRed)
-                    elif b"videoOn" in buf:
-                         setNewState(mSerial,kVideoOn)
-                    elif b"videoOff" in buf:
-                         setNewState(mSerial,kVideoOff)
-                    elif b"yellow" in buf:
-                         setNewState(mSerial,kUserYellow)
-                    elif b"green" in buf:
-                         setNewState(mSerial,kUserGreen)
-                    elif b"off" in buf:
-                         setNewState(mSerial,kUserOff)
-                    elif b"quit" in buf:
-                         runningFlag = False  
-                    print (buf)
+                    print ("state: ", kStateStrings[currentState], " input: ",buf)
+                    if b"quit" in buf:
+                          runningFlag = False
+                    else:
+                         for token in kTokenInputMap:
+                              if token[0] in buf:
+                                   transitionToNewState(mSerial,token[1])
+                                   break
         
         # check if overall timeout (so we don't run forever)
         if ((time.time() - startTime) > kOverallTimeOut):
