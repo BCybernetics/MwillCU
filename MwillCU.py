@@ -114,7 +114,7 @@ kStateStrings = [
      "VideoOff"
 ]
 
-# element at [<senderColor>,<lastSenderCurrentColor>] is <newSenderNewColor>
+# element at [<senderColor> (row),<lastSenderCurrentColor> (column)] is <newSenderNewColor>
 kTransitionTable = [
 [kUserOff,kUserOff,kUserOff,kUserOff,kUserOff,kUserOff,kUserOff,kUserOff,kUserOff,kUserOff],
 [kUserGreen,kUserGreen,kUserGreen,kUserGreen,kUserGreen,kUserGreen,kUserGreen,kUserGreen,kUserGreen,kVideoOff],
@@ -136,12 +136,13 @@ kOffTimeOut = 3600 # 60 minutes
 kRedTimeOut = 3300.0 # 55 minutes
 kYellowTimeOut = 600.0 # 10 minutes
 kGreenTimeOut = 3300.0 # 55 minutes
+kUserTimeOut = 3600.0 # 55 minutes
 
 kTimeOuts = [
      [kOffTimeOut,kActiveGreen],
-     [kGreenTimeOut,kActiveGreen],
-     [kYellowTimeOut,kActiveGreen],
-     [kRedTimeOut,kTimerYellow],
+     [kUserTimeOut,kActiveGreen],
+     [kUserTimeOut,kActiveGreen],
+     [0,kTimerYellow],
      [0,kActiveGreen],
      [0,kIdleOff],
      [kYellowTimeOut,kUserGreen ],
